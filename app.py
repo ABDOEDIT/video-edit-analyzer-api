@@ -1,0 +1,64 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import os
+import tempfile
+import pytesseract
+import cv2
+import whisper
+from scenedetect import VideoManager, SceneManager
+from scenedetect.detectors import ContentDetector
+from detect_effects import detect_effects  # <-- updated file
+
+app = Flask(__name__)
+CORS(app)
+
+# Load Whisper model
+whisper_model = whisper.load_model("base")
+
+
+def transcribe_audio(video_path):
+    result = whisper_model.transcribe(video_path)
+    return result["text"]
+
+
+def extract_visible_text(video_path):
+    cap = cv2.VideoCapture(video_path)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    text_results = []
+
+    for i in range(0, frame_count, 30):  # ~1 frame per second
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+        ret, frame = cap.read()
+        if not ret:
+            break
+        text = pytesseract.image_to_string(frame)
+        if text.strip():
+            text_results.append({"frame": i, "text": text.strip()})
+
+    cap.release()
+    return text_results
+
+
+def detect_scenes(video_path):
+    video_manager = VideoManager([video_path])
+    scene_manager = SceneManager()
+    scene_manager.add_detector(ContentDetector(threshold=30.0))
+    video_manager.set_downscale_factor()
+    video_manager.start()
+    scene_manager.detect_scenes(frame_source=video_manager)
+    scenes = scene_manager.get_scene_list()
+    return [{"start": str(start), "end": str(end)} for start, end in scenes]
+
+
+@app.route('/upload', methods=['POST'])
+def upload_video():
+    if 'video' not in request.files:
+        return jsonify({"error": "No video file uploaded"}), 400
+
+    video = request.files['video']
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp:
+        video_path = tmp.name
+        video.save(video_path)
+
+    try:
+        transcription = transcrib

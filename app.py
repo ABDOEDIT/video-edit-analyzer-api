@@ -61,4 +61,23 @@ def upload_video():
         video.save(video_path)
 
     try:
-        transcription = transcrib
+        transcription = transcribe_audio(video_path)
+        visible_text = extract_visible_text(video_path)
+        scene_changes = detect_scenes(video_path)
+        effects = detect_effects(video_path)
+
+        return jsonify({
+            "transcription": transcription,
+            "visible_text": visible_text,
+            "scene_changes": scene_changes,
+            "effects": effects
+        })
+
+    finally:
+        if os.path.exists(video_path):
+            os.remove(video_path)
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port, debug=True)

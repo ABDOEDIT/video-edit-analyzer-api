@@ -4,21 +4,12 @@ import os
 import tempfile
 import pytesseract
 import cv2
-import whisper
 from scenedetect import VideoManager, SceneManager
 from scenedetect.detectors import ContentDetector
-from detect_effects import detect_effects  # <-- updated file
+from detect_effects import detect_effects  # Your effects detection file
 
 app = Flask(__name__)
 CORS(app)
-
-# Load Whisper model
-whisper_model = whisper.load_model("tiny")
-
-
-def transcribe_audio(video_path):
-    result = whisper_model.transcribe(video_path)
-    return result["text"]
 
 
 def extract_visible_text(video_path):
@@ -61,7 +52,11 @@ def upload_video():
         video.save(video_path)
 
     try:
-        transcription = transcribe_audio(video_path)
+        # Lazy-load Whisper only when needed
+        import whisper
+        whisper_model = whisper.load_model("tiny")
+
+        transcription = whisper_model.transcribe(video_path)["text"]
         visible_text = extract_visible_text(video_path)
         scene_changes = detect_scenes(video_path)
         effects = detect_effects(video_path)
@@ -79,5 +74,6 @@ def upload_video():
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # Important for Render: bind to 0.0.0.0 and use PORT env variable
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)

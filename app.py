@@ -13,7 +13,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Load Whisper model
-whisper_model = whisper.load_model("base")
+whisper_model = whisper.load_model("tiny")
 
 
 def transcribe_audio(video_path):

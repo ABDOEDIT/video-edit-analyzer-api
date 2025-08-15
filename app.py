@@ -4,20 +4,34 @@ import os
 import tempfile
 import pytesseract
 import cv2
+import whisper
 from scenedetect import VideoManager, SceneManager
 from scenedetect.detectors import ContentDetector
-from detect_effects import detect_effects  # Your effects detection file
+from detect_effects import detect_effects
+import time
 
 app = Flask(__name__)
-CORS(app)
 
+# ✅ Allow only your Netlify frontend
+CORS(app, resources={r"/*": {"origins": "https://splendorous-medovik-3b32ad.netlify.app"}})
+
+# ✅ Load smaller Whisper model for speed & free-tier memory limits
+whisper_model = whisper.load_model("tiny")
+
+def transcribe_audio(video_path):
+    start_time = time.time()
+    result = whisper_model.transcribe(video_path)
+    elapsed = time.time() - start_time
+    if elapsed > 45:
+        return "[⚠️ Warning: Video too long, results may be cut off due to server timeout]"
+    return result["text"]
 
 def extract_visible_text(video_path):
     cap = cv2.VideoCapture(video_path)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     text_results = []
 
-    for i in range(0, frame_count, 30):  # ~1 frame per second
+    for i in range(0, frame_count, 30):  # 1 frame/sec approx
         cap.set(cv2.CAP_PROP_POS_FRAMES, i)
         ret, frame = cap.read()
         if not ret:
@@ -29,7 +43,6 @@ def extract_visible_text(video_path):
     cap.release()
     return text_results
 
-
 def detect_scenes(video_path):
     video_manager = VideoManager([video_path])
     scene_manager = SceneManager()
@@ -39,7 +52,6 @@ def detect_scenes(video_path):
     scene_manager.detect_scenes(frame_source=video_manager)
     scenes = scene_manager.get_scene_list()
     return [{"start": str(start), "end": str(end)} for start, end in scenes]
-
 
 @app.route('/upload', methods=['POST'])
 def upload_video():
@@ -52,11 +64,7 @@ def upload_video():
         video.save(video_path)
 
     try:
-        # Lazy-load Whisper only when needed
-        import whisper
-        whisper_model = whisper.load_model("tiny")
-
-        transcription = whisper_model.transcribe(video_path)["text"]
+        transcription = transcribe_audio(video_path)
         visible_text = extract_visible_text(video_path)
         scene_changes = detect_scenes(video_path)
         effects = detect_effects(video_path)
@@ -72,8 +80,5 @@ def upload_video():
         if os.path.exists(video_path):
             os.remove(video_path)
 
-
 if __name__ == '__main__':
-    # Important for Render: bind to 0.0.0.0 and use PORT env variable
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)

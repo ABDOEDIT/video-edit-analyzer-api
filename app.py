@@ -4,34 +4,23 @@ import os
 import tempfile
 import pytesseract
 import cv2
-import whisper
 from scenedetect import VideoManager, SceneManager
 from scenedetect.detectors import ContentDetector
-from detect_effects import detect_effects
-import time
+from detect_effects import detect_effects  # our custom module
 
 app = Flask(__name__)
+CORS(app)
 
-# ✅ Allow only your Netlify frontend
-CORS(app, resources={r"/*": {"origins": "https://splendorous-medovik-3b32ad.netlify.app"}})
 
-# ✅ Load smaller Whisper model for speed & free-tier memory limits
-whisper_model = whisper.load_model("tiny")
-
-def transcribe_audio(video_path):
-    start_time = time.time()
-    result = whisper_model.transcribe(video_path)
-    elapsed = time.time() - start_time
-    if elapsed > 45:
-        return "[⚠️ Warning: Video too long, results may be cut off due to server timeout]"
-    return result["text"]
-
+# -----------------------------
+# OCR: Extract text from frames
+# -----------------------------
 def extract_visible_text(video_path):
     cap = cv2.VideoCapture(video_path)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     text_results = []
 
-    for i in range(0, frame_count, 30):  # 1 frame/sec approx
+    for i in range(0, frame_count, 30):  # ~1 frame per second
         cap.set(cv2.CAP_PROP_POS_FRAMES, i)
         ret, frame = cap.read()
         if not ret:
@@ -43,6 +32,10 @@ def extract_visible_text(video_path):
     cap.release()
     return text_results
 
+
+# -----------------------------
+# Scene Detection
+# -----------------------------
 def detect_scenes(video_path):
     video_manager = VideoManager([video_path])
     scene_manager = SceneManager()
@@ -53,6 +46,10 @@ def detect_scenes(video_path):
     scenes = scene_manager.get_scene_list()
     return [{"start": str(start), "end": str(end)} for start, end in scenes]
 
+
+# -----------------------------
+# Upload Endpoint
+# -----------------------------
 @app.route('/upload', methods=['POST'])
 def upload_video():
     if 'video' not in request.files:
@@ -64,13 +61,11 @@ def upload_video():
         video.save(video_path)
 
     try:
-        transcription = transcribe_audio(video_path)
         visible_text = extract_visible_text(video_path)
         scene_changes = detect_scenes(video_path)
         effects = detect_effects(video_path)
 
         return jsonify({
-            "transcription": transcription,
             "visible_text": visible_text,
             "scene_changes": scene_changes,
             "effects": effects
@@ -80,5 +75,9 @@ def upload_video():
         if os.path.exists(video_path):
             os.remove(video_path)
 
+
+# -----------------------------
+# Run App
+# -----------------------------
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

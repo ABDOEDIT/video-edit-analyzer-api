@@ -6,15 +6,12 @@ import pytesseract
 import cv2
 from scenedetect import VideoManager, SceneManager
 from scenedetect.detectors import ContentDetector
-from detect_effects import detect_effects  # our custom module
+from detect_effects import detect_effects  # Your effects module
 
 app = Flask(__name__)
 CORS(app)
 
 
-# -----------------------------
-# OCR: Extract text from frames
-# -----------------------------
 def extract_visible_text(video_path):
     cap = cv2.VideoCapture(video_path)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -33,9 +30,6 @@ def extract_visible_text(video_path):
     return text_results
 
 
-# -----------------------------
-# Scene Detection
-# -----------------------------
 def detect_scenes(video_path):
     video_manager = VideoManager([video_path])
     scene_manager = SceneManager()
@@ -47,9 +41,6 @@ def detect_scenes(video_path):
     return [{"start": str(start), "end": str(end)} for start, end in scenes]
 
 
-# -----------------------------
-# Upload Endpoint
-# -----------------------------
 @app.route('/upload', methods=['POST'])
 def upload_video():
     if 'video' not in request.files:
@@ -76,8 +67,5 @@ def upload_video():
             os.remove(video_path)
 
 
-# -----------------------------
-# Run App
-# -----------------------------
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

@@ -4,3 +4,4 @@ opencv-python-headless
 pytesseract
 scenedetect
 numpy
+gunicorn
